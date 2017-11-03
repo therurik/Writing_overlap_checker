@@ -1,0 +1,127 @@
+from __future__ import division
+import nltk
+from nltk.stem import WordNetLemmatizer
+lemm=WordNetLemmatizer()
+def overlap(sc,prod):
+    #clean the reference text of punctuation which does not separate words
+    csc = "".join([c if c.isalnum() or c in [" ","/"] else '' for c in sc])
+    #clean the reference text of punctuation which separates words
+    ccsc = "".join([c if c.isalnum() else ' ' for c in csc])
+    #clean the comparison text of punctuation which does not separate words
+    cprod= "".join([c if c.isalnum() or c in [" ","/"] else '' for c in prod])
+    #clean the comparison text of punctuation which separates words
+    ccprod = "".join([c if c.isalnum() else ' ' for c in cprod])
+    #need to normalize for case
+    lcsc=ccsc.lower()
+    lcprod=ccprod.lower()
+    #start a list which will have all lemma tokens in the reference text
+    sclem=[]
+    for wrd in nltk.pos_tag(lcsc.split()):
+        if wrd[1][0]=='N':
+            sclem.append(lemm.lemmatize(wrd[0],pos='n'))
+        elif wrd[1][0]=='V':
+            sclem.append(lemm.lemmatize(wrd[0],pos='v'))
+        elif wrd[1][0]=='J':
+            sclem.append(lemm.lemmatize(wrd[0],pos='a'))
+        elif wrd[1][0]=='R':
+            sclem.append(lemm.lemmatize(wrd[0],pos='r'))
+        else:
+            sclem.append(wrd[0])
+    #make a series of lists containing each ngram for all possible n in the reference text
+    scgrammed=["Source text ngram lists for each possible length of gram in source"]
+    for j in range(0,len(sclem)):
+        scgrammed.append([])
+        for i in range(0,len(sclem)-j):
+            scgrammed[j+1].append(' '.join(sclem[i:i+j+1]))
+    #start a list which will have all lemma tokens in the comparison text
+    prodlem=[]
+    for wrd in nltk.pos_tag(lcprod.split()):
+        if wrd[1][0]=='N':
+            prodlem.append(lemm.lemmatize(wrd[0],pos='n'))
+        elif wrd[1][0]=='V':
+            prodlem.append(lemm.lemmatize(wrd[0],pos='v'))
+        elif wrd[1][0]=='J':
+            prodlem.append(lemm.lemmatize(wrd[0],pos='a'))
+        elif wrd[1][0]=='R':
+            prodlem.append(lemm.lemmatize(wrd[0],pos='r'))
+        else:
+            prodlem.append(wrd[0])
+    #make a series of lists containing each ngram for all possible n in the comparison text
+    prodgrammed=["Source text ngram lists for each possible length of gram in source-based text"]
+    for j in range(0,len(prodlem)):
+        prodgrammed.append([])
+        for i in range(0,len(prodlem)-j):
+            prodgrammed[j+1].append(' '.join(prodlem[i:i+j+1]))
+    #make lists for measuring overlap. Descriptions start each list.
+    overlap=["Overlap lists by number of words in gram"]
+    overcount=["Overlapping count lists by gram size. Shows count in source and in source-based text"]
+    for i in range(1,len(prodgrammed)):
+        overlap.append([])
+        overcount.append([])
+        for j in range(0,len(prodgrammed[i])-1):
+            if prodgrammed[i][j] in scgrammed[i]:
+                overlap[i].append(prodgrammed[i][j])
+                ch=[]
+                for k in range(0,len(overcount[i])):
+                    ch.append(prodgrammed[i][j] in overcount[i][k])
+                if True not in ch:
+                    overcount[i].append([prodgrammed[i][j],prodgrammed[i].count(prodgrammed[i][j]),scgrammed[i].count(prodgrammed[i][j])])
+    #clean and condense lists
+    if len(sclem)>5 and len(prodlem)>5:
+        while overlap[-1] == []:
+            overlap.remove(overlap[-1])
+        while overcount[-1] == []:
+            overcount.remove(overcount[-1])
+        for l in range(6,len(overlap)-1):
+            overlap[len(overlap)-2]+=overlap.pop()
+        for m in range(6,len(overcount)-1):
+            overcount[len(overcount)-2]+=overcount.pop()
+    #If needed, a pattern of where overlap occurs can be created
+    ###distpattern=[]
+    ###for alph in range(0,len(prodlem)):
+    ###    if prodlem[alph] in sclem:
+    ###        distpattern.append(prodlem[alph])
+    ###    else:
+    ###        distpattern.append(' ')
+    ###diststringfile= "Tokens of source-based writing"+",".join(prodlem)+"\n"+"Copied distribution"+",".join(distpattern)
+    overmax=["Maximal string overlap with count"]
+    w=0    
+    for r in range(0,len(prodlem)):
+        if r>=w:
+            if prodlem[r] in sclem:
+                overstr=[prodlem[r]]
+                w=r
+                while ' '.join(overstr) in lcsc:
+                    try:
+                        overstr.append(prodlem[w+1])
+                        w+=1
+                    except IndexError:
+                        overstr.append('')
+                        w+=1
+                overmax.append(' '.join(overstr[:-1]))
+    unique=['Ngrams in the source-based text which overlap with a unique-link']
+    for q in range(1,len(overmax)):
+        for g in range(1,len(overcount)):
+            for h in range(0,len(overcount[g])):
+                if overcount[g][h][2]==1:
+                    if overcount[g][h][0] == overmax[q]:
+                        unique.append(overmax[q])
+    #Find the list of Ngrams which represent unique links to the reference
+    u = ','.join(unique)
+    #Find the maximal list of Ngrams overlapping with the reference
+    maxo = ','.join(overmax)
+    #Percentage of comparison text covered by unique links to the reference text
+    y = (len(' '.join(unique[1:]).split()))/len(prodlem)
+    #Percentage of comparison text covered by all ngrams in the reference text
+    z = (len(' '.join(overmax[1:]).split()))/len(prodlem)
+    return '\n'.join([u,maxo,str(y),str(z)])
+
+#The actual function to run which gets files and writes a textfile with results
+def overresults():
+    sav=raw_input("Input directory for this project (reference and comparison texts should be in this folder):")
+    source=raw_input("Input the file name (including extension .txt) of the reference text: "+sav+"/")
+    production=raw_input("Input the file name (including extension .txt) of the comparison text: "+sav+"/")
+    s=file(sav+'/'+source,'r').read()
+    p=file(sav+'/'+production,'r').read()
+    results=overlap(s,p)
+    file(sav+'/results.txt','w').write(results)
